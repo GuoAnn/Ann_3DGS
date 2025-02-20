@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import trimesh
 from PIL import Image
+import imageio.v2 as imageio
 
 from gaussian_splatting.utils.graphics_utils import focal2fov
 
@@ -258,7 +259,7 @@ class MonocularDataset(BaseDataset):
         color_path = self.color_paths[idx]
         pose = self.poses[idx]
 
-        image = np.array(Image.open(color_path))
+        image = np.array(Image.open(color_path))[:,:,:3] #只取前三个通道
         depth = None
 
         if self.disorted:
@@ -266,7 +267,10 @@ class MonocularDataset(BaseDataset):
 
         if self.has_depth:
             depth_path = self.depth_paths[idx]
-            depth = np.array(Image.open(depth_path)) / self.depth_scale
+            ##depth = np.array(Image.open(depth_path)) / self.depth_scale
+            #depth = imageio.imread(depth_path).astype(np.float32)
+            #if depth_path.endswith('.exr'):
+                #depth = depth[:, :, 0]  # Assuming the depth is stored in the first channel
 
         image = (
             torch.from_numpy(image / 255.0)
