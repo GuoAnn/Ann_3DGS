@@ -162,6 +162,11 @@ def eval_rendering(
         ssim_array.append(ssim_score.item())
         lpips_array.append(lpips_score.item())
 
+         # 保存渲染得到的图像
+        image_save_dir = os.path.join(save_dir, "rendered_images", str(iteration))
+        mkdir_p(image_save_dir)
+        cv2.imwrite(os.path.join(image_save_dir, f"rendered_{idx}.png"), pred)
+
     output = dict()
     output["mean_psnr"] = float(np.mean(psnr_array))
     output["mean_ssim"] = float(np.mean(ssim_array))
