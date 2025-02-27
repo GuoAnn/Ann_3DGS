@@ -6,6 +6,8 @@ import cv2
 import numpy as np
 import torch
 import trimesh
+import Imath
+import OpenEXR as exr
 from PIL import Image
 import imageio.v2 as imageio
 
@@ -255,6 +257,48 @@ class MonocularDataset(BaseDataset):
             },
         }
 
+    def readEXR_onlydepth(self, filename):
+        """
+        Read depth data from EXR image file.
+
+        Args:
+            filename (str): File path.
+
+        Returns:
+            Y (numpy.array): Depth buffer in float32 format.
+        """
+        # move the import here since only CoFusion needs these package
+        # sometimes installation of openexr is hard, you can run all other datasets
+        # even without openexr
+
+        exrfile = exr.InputFile(filename)
+        header = exrfile.header()
+        dw = header['dataWindow']
+        isize = (dw.max.y - dw.min.y + 1, dw.max.x - dw.min.x + 1)
+
+        channelData = dict()
+
+        for c in header['channels']:
+            C = exrfile.channel(c, Imath.PixelType(Imath.PixelType.FLOAT))
+            C = np.fromstring(C, dtype=np.float32)
+            C = np.reshape(C, isize)
+
+            channelData[c] = C
+
+        Y = None if 'R' not in header['channels'] else channelData['R']
+
+        far_=4.
+        near_=0.01
+        x=1.0-far_/near_
+        y=far_/near_
+        z=x/far_
+        w=y/far_
+        for i in range(dw.max.y - dw.min.y + 1):
+            for j in range(dw.max.x - dw.min.x + 1):
+                Y[i][j]= 1./(z*(1-Y[i][j])+w)
+
+        return Y
+
     def __getitem__(self, idx):
         color_path = self.color_paths[idx]
         pose = self.poses[idx]
@@ -267,10 +311,22 @@ class MonocularDataset(BaseDataset):
 
         if self.has_depth:
             depth_path = self.depth_paths[idx]
-            ##depth = np.array(Image.open(depth_path)) / self.depth_scale
-            #depth = imageio.imread(depth_path).astype(np.float32)
-            #if depth_path.endswith('.exr'):
-                #depth = depth[:, :, 0]  # Assuming the depth is stored in the first channel
+
+            if depth_path.endswith('.exr'):
+                depth = self.readEXR_onlydepth(depth_path)
+                '''exr_image = imageio.imread(depth_path)
+                depth_channel = exr_image[...,2]
+                far_ = 4.0
+                near_ = 0.01
+                x = 1.0-far_ / near_
+                y = far_ / near_
+                z = x / far_
+                w = y / far_
+                depth = 1.0 / (z * (1 -depth_channel) + w)'''
+            else:
+                depth = np.array(Image.open(depth_path)) / self.depth_scale
+
+
 
         image = (
             torch.from_numpy(image / 255.0)
