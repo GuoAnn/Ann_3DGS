@@ -29,6 +29,8 @@ def evaluate_evo(poses_gt, poses_est, plot_dir, label, monocular=False):
     ## Plot
     traj_ref = PosePath3D(poses_se3=poses_gt)
     traj_est = PosePath3D(poses_se3=poses_est)
+    #print(f"traj_est: {traj_est.positions_xyz}")
+    #print(f"traj_ref: {traj_ref.positions_xyz}")
     traj_est_aligned = trajectory.align_trajectory(
         traj_est, traj_ref, correct_scale=monocular
     )
@@ -70,6 +72,10 @@ def evaluate_evo(poses_gt, poses_est, plot_dir, label, monocular=False):
 
 def eval_ate(frames, kf_ids, save_dir, iterations, final=False, monocular=False):
     trj_data = dict()
+    #for kf_id in kf_ids:
+        #if kf_id <50:#最开始几帧的时候trj_est是空的，没法对齐，就会报错.把前端的轨迹评估加个判断条件，第50帧再开始评估轨迹
+            #continue
+    #print(f"kf_ids: {kf_ids}")
     latest_frame_idx = kf_ids[-1] + 2 if final else kf_ids[-1] + 1
     trj_id, trj_est, trj_gt = [], [], []
     trj_est_np, trj_gt_np = [], []
