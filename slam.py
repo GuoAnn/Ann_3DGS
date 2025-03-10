@@ -203,8 +203,12 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Training script parameters")
     parser.add_argument("--config", type=str)
     parser.add_argument("--eval", action="store_true")
+    parser.add_argument("--gt_pose", action="store_true")
 
     args = parser.parse_args(sys.argv[1:])
+
+    if args.gt_pose:
+        os.environ["USE_GT_POSE"] = "True"
 
     mp.set_start_method("spawn")
 
