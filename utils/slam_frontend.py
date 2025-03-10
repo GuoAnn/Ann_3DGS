@@ -1,4 +1,5 @@
 import time
+import os
 
 import numpy as np
 import torch
@@ -18,6 +19,7 @@ from utils.slam_utils import get_loss_tracking, get_median_depth
 class FrontEnd(mp.Process):
     def __init__(self, config):
         super().__init__()
+        self.gt_pose = os.environ.get("USE_GT_POSE") == "True"
         self.config = config
         self.background = None
         self.pipeline_params = None
@@ -124,6 +126,39 @@ class FrontEnd(mp.Process):
         depth_map = self.add_new_keyframe(cur_frame_idx, init=True)
         self.request_init(cur_frame_idx, viewpoint, depth_map)
         self.reset = False
+
+    # Tracking with ground truth pose
+    def tracking_with_gt_pose(self, cur_frame_idx, viewpoint):
+        # 使用 ground truth pose 进行渲染
+        viewpoint.update_RT(viewpoint.R_gt, viewpoint.T_gt)
+
+        # 渲染当前帧
+        render_pkg = render(
+            viewpoint, self.gaussians, self.pipeline_params, self.background
+        )
+        image, depth, opacity = (
+            render_pkg["render"],
+            render_pkg["depth"],
+            render_pkg["opacity"],
+        )
+
+        self.q_main2vis.put(
+            gui_utils.GaussianPacket(
+                current_frame=viewpoint,
+                gtcolor=viewpoint.original_image,
+                gtdepth=viewpoint.depth
+                if not self.monocular
+                else np.zeros((viewpoint.image_height, viewpoint.image_width)),
+            )
+        )
+
+        # 更新中值深度
+        self.median_depth = get_median_depth(depth, opacity)
+        return render_pkg 
+
+    def tracking(self, cur_frame_idx, viewpoint):
+        prev = self.cameras[cur_frame_idx - self.use_every_n_frames]
+        viewpoint.update_RT(prev.R, prev.T)
 
     def tracking(self, cur_frame_idx, viewpoint):
         prev = self.cameras[cur_frame_idx - self.use_every_n_frames]
