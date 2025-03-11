@@ -1,5 +1,6 @@
 import random
 import time
+import os
 
 import torch
 import torch.multiprocessing as mp
@@ -16,6 +17,7 @@ from utils.slam_utils import get_loss_mapping
 class BackEnd(mp.Process):
     def __init__(self, config):
         super().__init__()
+        self.use_gt_pose = os.environ.get("USE_GT_POSE") == "True"
         self.config = config
         self.gaussians = None
         self.pipeline_params = None
@@ -307,8 +309,12 @@ class BackEnd(mp.Process):
                 self.gaussians.optimizer.step()
                 self.gaussians.optimizer.zero_grad(set_to_none=True)
                 self.gaussians.update_learning_rate(self.iteration_count)
-                self.keyframe_optimizers.step()
-                self.keyframe_optimizers.zero_grad(set_to_none=True)
+
+                # 根据 use_gt_pose 决定是否跳过位姿优化
+                if not self.use_gt_pose:
+                    self.keyframe_optimizers.step()
+                    self.keyframe_optimizers.zero_grad(set_to_none=True)
+
                 # Pose update
                 for cam_idx in range(min(frames_to_optimize, len(current_window))):
                     viewpoint = viewpoint_stack[cam_idx]
@@ -416,6 +422,7 @@ class BackEnd(mp.Process):
                     self.current_window = current_window
                     self.add_next_kf(cur_frame_idx, viewpoint, depth_map=depth_map)
 
+                           
                     opt_params = []
                     frames_to_optimize = self.config["Training"]["pose_window"]
                     iter_per_kf = self.mapping_itr_num if self.single_thread else 10
@@ -427,10 +434,10 @@ class BackEnd(mp.Process):
                             frames_to_optimize = (
                                 self.config["Training"]["window_size"] - 1
                             )
-                            iter_per_kf = 50 if self.live_mode else 300
+                            iter_per_kf = 50 if self.live_mode else 300 #150 1000
                             Log("Performing initial BA for initialization")
                         else:
-                            iter_per_kf = self.mapping_itr_num
+                            iter_per_kf = self.mapping_itr_num #*3
                     for cam_idx in range(len(self.current_window)):
                         if self.current_window[cam_idx] == 0:
                             continue
@@ -468,7 +475,9 @@ class BackEnd(mp.Process):
                                 "name": "exposure_b_{}".format(viewpoint.uid),
                             }
                         )
-                    self.keyframe_optimizers = torch.optim.Adam(opt_params)
+                    # 根据 use_gt_pose 决定是否跳过位姿优化
+                    if not self.use_gt_pose: 
+                        self.keyframe_optimizers = torch.optim.Adam(opt_params)
 
                     self.map(self.current_window, iters=iter_per_kf)
                     self.map(self.current_window, prune=True)

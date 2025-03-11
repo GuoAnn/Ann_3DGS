@@ -160,10 +160,6 @@ class FrontEnd(mp.Process):
         prev = self.cameras[cur_frame_idx - self.use_every_n_frames]
         viewpoint.update_RT(prev.R, prev.T)
 
-    def tracking(self, cur_frame_idx, viewpoint):
-        prev = self.cameras[cur_frame_idx - self.use_every_n_frames]
-        viewpoint.update_RT(prev.R, prev.T)
-
         opt_params = []
         opt_params.append(
             {
@@ -424,7 +420,10 @@ class FrontEnd(mp.Process):
                 )
 
                 # Tracking
-                render_pkg = self.tracking(cur_frame_idx, viewpoint)
+                if self.gt_pose:
+                    render_pkg = self.tracking_with_gt_pose(cur_frame_idx, viewpoint)
+                else:
+                    render_pkg = self.tracking(cur_frame_idx, viewpoint)
 
                 current_window_dict = {}
                 current_window_dict[self.current_window[0]] = self.current_window[1:]
